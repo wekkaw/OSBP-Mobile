@@ -1,0 +1,19 @@
+# Git
+.git
+.gitignore
+
+# Docker files (they are not needed inside the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker-entrypoint.sh
+
+# Environment files (secrets should not be copied into the image)
+.env
+.env.example
+
+# Node modules (if any were used locally for development)
+node_modules
+
+# README or other markdown files
+*.md

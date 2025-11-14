@@ -1,0 +1,8 @@
+# Copy this file to a new file named .env and fill in your actual credentials.
+# This .env file should NOT be committed to version control.
+
+# The full URL for your LightLLM API endpoint (e.g., http://localhost:8000/v1/chat/completions)
+LIGHTLLM_API_ENDPOINT=YOUR_API_ENDPOINT_HERE
+
+# Your LightLLM API key (if required by your setup)
+LIGHTLLM_API_KEY=YOUR_API_KEY_HERE

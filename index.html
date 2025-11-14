@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Corporate Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-primary-start: 99 102 241; /* indigo-500 */
+        --color-primary-end: 168 85 247; /* purple-500 */
+        --color-glass: 255 255 255;
+        --color-glass-dark: 30 41 59; /* slate-800 */
+        --border-color: 226 232 240; /* slate-200 */
+        --border-color-dark: 51 65 85; /* slate-700 */
+
+        --glow-primary: 0 0 20px rgba(var(--color-primary-start), 0.4);
+      }
+
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #f8fafc; /* slate-50 */
+        background-image: radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0); /* slate-200 */
+        background-size: 2rem 2rem;
+      }
+
+      .dark body {
+        background-color: #020617; /* slate-950 */
+        background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.4s ease-in-out;
+      }
+      
+      @keyframes slideInUp {
+          from {
+              opacity: 0;
+              transform: translateY(20px);
+          }
+          to {
+              opacity: 1;
+              transform: translateY(0);
+          }
+      }
+      .animate-slide-in-up {
+        animation: slideInUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+      }
+
+      .content-view p {
+        margin-bottom: 1rem;
+        line-height: 1.7;
+      }
+      .content-view h1, .content-view h2, .content-view h3 {
+        font-weight: 700;
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        line-height: 1.3;
+      }
+       .text-glow {
+          text-shadow: 0 0 8px rgba(var(--color-primary-start), 0.3);
+      }
+    </style>
+    <script>
+      // Define environment variables for the browser
+      // These placeholders will be replaced by the entrypoint script in the Docker container
+      window.process = {
+        env: {
+          LIGHTLLM_API_ENDPOINT: '__LIGHTLLM_API_ENDPOINT__',
+          LIGHTLLM_API_KEY: '__LIGHTLLM_API_KEY__',
+        }
+      };
+    </script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
