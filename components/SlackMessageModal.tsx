@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+// FIX: Import GoogleGenAI to use the Gemini API.
+import { GoogleGenAI } from '@google/genai';
 import { ProcessedContact } from '../types';
 import Card from './common/Card';
 import LoadingSpinner from './common/LoadingSpinner';
@@ -8,6 +10,9 @@ interface SlackMessageModalProps {
     contact: ProcessedContact;
     onClose: () => void;
 }
+
+// FIX: Initialize the Gemini API client.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SlackMessageModal: React.FC<SlackMessageModalProps> = ({ contact, onClose }) => {
     const [message, setMessage] = useState('');
@@ -20,37 +25,27 @@ const SlackMessageModal: React.FC<SlackMessageModalProps> = ({ contact, onClose 
         const generateMessage = async () => {
             setIsLoading(true);
             setError(null);
+            // FIX: Replaced deprecated API call with Gemini API for message generation.
             try {
-                if (!process.env.LIGHTLLM_API_ENDPOINT) {
-                    throw new Error("LightLLM API endpoint is not configured.");
+                if (!process.env.API_KEY) {
+                    throw new Error("Gemini API key is not configured.");
                 }
 
                 const prompt = `Compose a professional and friendly Slack message to ${contact.name}, who is a ${contact.title} at ${contact.center}. The purpose is to initiate a conversation about potential business opportunities or collaborations. Keep it concise and engaging.`;
+                const systemInstruction = 'You are a helpful assistant specialized in writing professional business communications.';
 
-                const response = await fetch(process.env.LIGHTLLM_API_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${process.env.LIGHTLLM_API_KEY || ''}`
-                    },
-                    body: JSON.stringify({
-                        model: 'light-llm-model', // Using a placeholder model name
-                        messages: [
-                            { role: 'system', content: 'You are a helpful assistant specialized in writing professional business communications.' },
-                            { role: 'user', content: prompt }
-                        ],
-                        max_tokens: 200,
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: {
+                        systemInstruction,
                         temperature: 0.7,
-                    }),
+                        maxOutputTokens: 200,
+                        thinkingConfig: { thinkingBudget: 50 },
+                    }
                 });
 
-                if (!response.ok) {
-                    const errorBody = await response.text();
-                    throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
-                }
-
-                const data = await response.json();
-                const generatedText = data.choices?.[0]?.message?.content;
+                const generatedText = response.text;
 
                 if (!generatedText) {
                     throw new Error("Invalid response structure from API.");

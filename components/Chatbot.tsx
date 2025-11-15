@@ -1,17 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
+// FIX: Import GoogleGenAI to use the Gemini API.
+import { GoogleGenAI } from '@google/genai';
 import { ICONS } from '../constants';
 import Card from './common/Card';
-import { ProcessedData } from '../types';
+import { ProcessedData, ProcessedContact, Contract, Event } from '../types';
 
 interface Message {
     role: 'user' | 'model';
     text: string;
 }
 
+interface IndexedDocument {
+    text: string;
+    embedding: number[];
+    metadata: {
+        type: 'Contact' | 'Contract' | 'Event';
+        id: string | number;
+    };
+}
+
 interface ChatbotProps {
     onClose: () => void;
     data: ProcessedData | null;
 }
+
+type IndexingStatus = 'idle' | 'indexing' | 'ready' | 'error';
 
 const TypingIndicator: React.FC = () => (
     <div className="flex items-center space-x-1.5">
@@ -21,82 +34,149 @@ const TypingIndicator: React.FC = () => (
     </div>
 );
 
+// --- Vector Math Utility ---
+const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    if (magnitudeA === 0 || magnitudeB === 0) return 0;
+    return dotProduct / (magnitudeA * magnitudeB);
+};
+
+// FIX: Initialize the Gemini API client.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
 const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const [indexingStatus, setIndexingStatus] = useState<IndexingStatus>('idle');
+    const [indexProgress, setIndexProgress] = useState(0);
+    const indexedDocumentsRef = useRef<IndexedDocument[]>([]);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    
+    // FIX: Update configuration check to use Gemini API Key instead of old endpoint.
+    const isConfigured = !!process.env.LIGHTLLM_EMBEDDING_ENDPOINT && !!process.env.API_KEY;
 
-    // This function performs a simple search on the provided data
-    const retrieveContext = (query: string): string => {
-        if (!data) return '';
+    // --- Embedding and Indexing Logic ---
+    const getEmbedding = async (text: string): Promise<number[]> => {
+        if (!process.env.LIGHTLLM_EMBEDDING_ENDPOINT) {
+            throw new Error("Embedding endpoint is not configured.");
+        }
+        const response = await fetch(process.env.LIGHTLLM_EMBEDDING_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.LIGHTLLM_API_KEY || ''}`
+            },
+            body: JSON.stringify({
+                input: [text],
+                model: 'embedding-model-placeholder' // Model name might be required
+            }),
+        });
 
-        const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2); // Ignore short words
-        if (queryWords.length === 0) return '';
+        if (!response.ok) {
+            throw new Error(`Embedding API request failed: ${response.statusText}`);
+        }
+        const responseData = await response.json();
+        if (!responseData.data || !responseData.data[0] || !responseData.data[0].embedding) {
+            throw new Error("Invalid embedding response structure.");
+        }
+        return responseData.data[0].embedding;
+    };
+
+    const buildIndex = async () => {
+        if (!data || !isConfigured) return;
+        setIndexingStatus('indexing');
+        const documentsToIndex = [];
+
+        // 1. Collate documents
+        data.processedContacts.forEach(c => documentsToIndex.push({ text: `Contact: ${c.name}, ${c.title} at ${c.center}. Position: ${c.position}.`, metadata: { type: 'Contact', id: c.id } }));
+        data.processedContracts.forEach(c => documentsToIndex.push({ text: `Contract: ${c.contract_name} with ${c.contractor_name}. Value: ${c.potential_value}. Ends on ${c.ultimate_contract_end_date}.`, metadata: { type: 'Contract', id: c.id } }));
+        data.events.forEach(e => documentsToIndex.push({ text: `Event: ${e.title} at ${e.location} on ${e.date}. Description: ${e.description}`, metadata: { type: 'Event', id: e.id } }));
         
-        const foundItems: any[] = [];
-
-        // Search contacts
-        data.processedContacts.forEach(contact => {
-            const contactText = `${contact.name} ${contact.title} ${contact.center} ${contact.position}`.toLowerCase();
-            if (queryWords.some(word => contactText.includes(word))) {
-                foundItems.push({ type: 'Contact', name: contact.name, title: contact.title, center: contact.center });
-            }
-        });
-
-        // Search contracts
-        data.processedContracts.forEach(contract => {
-            const contractText = `${contract.contract_name} ${contract.contractor_name} ${contract.contract_number}`.toLowerCase();
-            if (queryWords.some(word => contractText.includes(word))) {
-                foundItems.push({ type: 'Contract', name: contract.contract_name, contractor: contract.contractor_name, value: contract.potential_value });
-            }
-        });
-        
-        // Search events
-        data.events.forEach(event => {
-            const eventText = `${event.title} ${event.location} ${event.description}`.toLowerCase();
-            if (queryWords.some(word => eventText.includes(word))) {
-                foundItems.push({ type: 'Event', title: event.title, date: event.date, location: event.location });
-            }
-        });
-
-        if (foundItems.length === 0) {
-            return "No specific information found in the local data for this query.";
+        const totalDocs = documentsToIndex.length;
+        if (totalDocs === 0) {
+            setIndexingStatus('ready');
+            return;
         }
 
-        return JSON.stringify(foundItems.slice(0, 5)); // Limit context size
+        // 2. Create embeddings for each document
+        const newIndexedDocs: IndexedDocument[] = [];
+        for (let i = 0; i < totalDocs; i++) {
+            // FIX: Moved `doc` declaration out of the try block to make it accessible in the catch block.
+            const doc = documentsToIndex[i];
+            try {
+                const embedding = await getEmbedding(doc.text);
+                newIndexedDocs.push({ ...doc, embedding });
+                setIndexProgress(((i + 1) / totalDocs) * 100);
+            } catch (err) {
+                console.error("Failed to embed document:", doc.text, err);
+                // Skip faulty documents
+            }
+        }
+        indexedDocumentsRef.current = newIndexedDocs;
+        setIndexingStatus('ready');
+    };
+    
+    // --- Context Retrieval ---
+    const retrieveContext = async (query: string, topK = 5): Promise<string> => {
+        if (indexingStatus !== 'ready' || indexedDocumentsRef.current.length === 0) {
+             return "The local data index is not ready. Please wait.";
+        }
+        try {
+            const queryEmbedding = await getEmbedding(query);
+            const similarities = indexedDocumentsRef.current.map(doc => ({
+                ...doc,
+                similarity: cosineSimilarity(queryEmbedding, doc.embedding),
+            }));
+
+            similarities.sort((a, b) => b.similarity - a.similarity);
+
+            const topResults = similarities.slice(0, topK);
+            
+            if (topResults.length === 0 || topResults[0].similarity < 0.3) { // Similarity threshold
+                return "No relevant information found in the local data for this query.";
+            }
+
+            return topResults.map(r => r.text).join('\n\n');
+        } catch(err) {
+             console.error("Error during context retrieval:", err);
+             return "An error occurred while searching for relevant information.";
+        }
     };
 
 
+    // --- Component Lifecycle & Effects ---
     useEffect(() => {
-        if (!process.env.LIGHTLLM_API_ENDPOINT) {
-            console.error("LightLLM API endpoint is not configured.");
-            setError("Chatbot is not configured. Please provide an API endpoint.");
+        if (!isConfigured) {
+            // FIX: Updated error message to reflect dependency on Gemini API Key.
+            setError("Chatbot is not configured. Please provide your Gemini API key and embedding endpoint.");
+            setIndexingStatus('error');
         } else {
-            setMessages([{
-                role: 'model',
-                text: "Hello! I can answer questions about the contacts, contracts, and events in this app. How can I help you?"
-            }]);
+            setMessages([{ role: 'model', text: "Hello! How can I help you today?" }]);
+            buildIndex();
         }
-    }, []);
+    }, [isConfigured, data]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isLoading]);
 
+
+    // --- User Interaction ---
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim() || isLoading) return;
+        if (!input.trim() || isLoading || indexingStatus !== 'ready') return;
 
         const userMessage: Message = { role: 'user', text: input };
-        const newMessages = [...messages, userMessage];
-        setMessages(newMessages);
+        setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
         setError(null);
         
-        const context = retrieveContext(input);
+        const context = await retrieveContext(input);
 
         const systemInstruction = `You are an expert assistant for a "Small Business Opportunities" dashboard.
 Answer the user's question based ONLY on the following information provided in the [AVAILABLE DATA] section. Do not use any external knowledge.
@@ -108,54 +188,49 @@ ${context}
 
 Keep your answers concise and professional.`;
 
+        // FIX: Replaced fetch call to a deprecated LLM with a call to the Gemini API.
         try {
-            if (!process.env.LIGHTLLM_API_ENDPOINT) {
-                throw new Error("LightLLM API endpoint is not configured.");
-            }
-
-            // We don't send the entire chat history for RAG, just the current question with context.
-            const apiMessages = [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: userMessage.text }
-            ];
-            
-            const response = await fetch(process.env.LIGHTLLM_API_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.LIGHTLLM_API_KEY || ''}`
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: userMessage.text,
+                config: {
+                    systemInstruction,
                 },
-                body: JSON.stringify({
-                    model: 'light-llm-model', // Using a placeholder model name
-                    messages: apiMessages,
-                }),
             });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
-            }
+            const modelReply = response.text;
+            if (!modelReply) throw new Error("Empty response from API.");
 
-            const responseData = await response.json();
-            
-            const modelReply = responseData.choices?.[0]?.message?.content;
-            if (!modelReply) {
-                throw new Error("Invalid response structure from API.");
-            }
-
-            const modelMessage: Message = { role: 'model', text: modelReply.trim() };
-            setMessages(prev => [...prev, modelMessage]);
+            setMessages(prev => [...prev, { role: 'model', text: modelReply.trim() }]);
         } catch (e: any) {
-            console.error("Error sending message to LightLLM API:", e);
-            const errorMessage: Message = { role: 'model', text: "Sorry, I encountered an error. Please try again." };
-            setMessages(prev => [...prev, errorMessage]);
+            console.error("Error sending message to Gemini API:", e);
+            setMessages(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error. Please try again." }]);
             setError("Failed to get a response from the AI.");
         } finally {
             setIsLoading(false);
         }
     };
     
-    const isConfigured = !!process.env.LIGHTLLM_API_ENDPOINT;
+    // --- Render Logic ---
+    const renderIndexingStatus = () => {
+        switch (indexingStatus) {
+            case 'indexing':
+                return (
+                    <div className="text-center text-xs text-slate-500 px-4 pb-2">
+                        <p>Preparing smart search...</p>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-1">
+                            <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${indexProgress}%` }}></div>
+                        </div>
+                    </div>
+                );
+            case 'ready':
+                return <p className="text-center text-xs text-green-600 dark:text-green-400 px-4 pb-2">Ready to assist!</p>;
+            case 'error':
+                 return <p className="text-center text-xs text-red-500 px-4 pb-2">{error}</p>
+            default:
+                return null;
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
@@ -189,7 +264,7 @@ Keep your answers concise and professional.`;
                          <div ref={messagesEndRef} />
                     </div>
 
-                    {error && <p className="text-center text-xs text-red-500 px-4 pb-2">{error}</p>}
+                    {renderIndexingStatus()}
 
                     <footer className="p-4 border-t border-slate-200/50 dark:border-slate-700/50 flex-shrink-0">
                         <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
@@ -197,13 +272,13 @@ Keep your answers concise and professional.`;
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder={isConfigured ? "Ask about contracts, contacts..." : "Chatbot not configured"}
+                                placeholder={indexingStatus === 'ready' ? "Ask about contracts, contacts..." : "Assistant is getting ready..."}
                                 className="w-full pl-4 pr-4 py-2.5 border-0 rounded-xl bg-slate-100 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                disabled={!isConfigured || isLoading}
+                                disabled={!isConfigured || isLoading || indexingStatus !== 'ready'}
                             />
                             <button
                                 type="submit"
-                                disabled={!isConfigured || isLoading || !input.trim()}
+                                disabled={!isConfigured || isLoading || !input.trim() || indexingStatus !== 'ready'}
                                 className="w-10 h-10 flex-shrink-0 bg-indigo-500 text-white rounded-full flex items-center justify-center transition-all hover:bg-indigo-600 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed"
                                 aria-label="Send message"
                             >
