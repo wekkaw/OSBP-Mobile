@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ICONS } from '../constants';
 import Card from './common/Card';
+import { ProcessedData } from '../types';
 
 interface Message {
     role: 'user' | 'model';
@@ -9,6 +10,7 @@ interface Message {
 
 interface ChatbotProps {
     onClose: () => void;
+    data: ProcessedData | null;
 }
 
 const TypingIndicator: React.FC = () => (
@@ -19,13 +21,53 @@ const TypingIndicator: React.FC = () => (
     </div>
 );
 
-const Chatbot: React.FC<ChatbotProps> = ({ onClose }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
-    const systemInstruction = 'You are a helpful AI assistant for a "Small Business Opportunities" dashboard. Your goal is to help users understand the data, find information about government contracts, locate key contacts, and stay informed about relevant events. Keep your answers concise and professional.';
+
+    // This function performs a simple search on the provided data
+    const retrieveContext = (query: string): string => {
+        if (!data) return '';
+
+        const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2); // Ignore short words
+        if (queryWords.length === 0) return '';
+        
+        const foundItems: any[] = [];
+
+        // Search contacts
+        data.processedContacts.forEach(contact => {
+            const contactText = `${contact.name} ${contact.title} ${contact.center} ${contact.position}`.toLowerCase();
+            if (queryWords.some(word => contactText.includes(word))) {
+                foundItems.push({ type: 'Contact', name: contact.name, title: contact.title, center: contact.center });
+            }
+        });
+
+        // Search contracts
+        data.processedContracts.forEach(contract => {
+            const contractText = `${contract.contract_name} ${contract.contractor_name} ${contract.contract_number}`.toLowerCase();
+            if (queryWords.some(word => contractText.includes(word))) {
+                foundItems.push({ type: 'Contract', name: contract.contract_name, contractor: contract.contractor_name, value: contract.potential_value });
+            }
+        });
+        
+        // Search events
+        data.events.forEach(event => {
+            const eventText = `${event.title} ${event.location} ${event.description}`.toLowerCase();
+            if (queryWords.some(word => eventText.includes(word))) {
+                foundItems.push({ type: 'Event', title: event.title, date: event.date, location: event.location });
+            }
+        });
+
+        if (foundItems.length === 0) {
+            return "No specific information found in the local data for this query.";
+        }
+
+        return JSON.stringify(foundItems.slice(0, 5)); // Limit context size
+    };
+
 
     useEffect(() => {
         if (!process.env.LIGHTLLM_API_ENDPOINT) {
@@ -34,7 +76,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose }) => {
         } else {
             setMessages([{
                 role: 'model',
-                text: "Hello! I'm your AI assistant. How can I help you find small business opportunities today?"
+                text: "Hello! I can answer questions about the contacts, contracts, and events in this app. How can I help you?"
             }]);
         }
     }, []);
@@ -53,18 +95,28 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose }) => {
         setInput('');
         setIsLoading(true);
         setError(null);
+        
+        const context = retrieveContext(input);
+
+        const systemInstruction = `You are an expert assistant for a "Small Business Opportunities" dashboard.
+Answer the user's question based ONLY on the following information provided in the [AVAILABLE DATA] section. Do not use any external knowledge.
+If the information to answer the question is not in the provided data, you MUST say that you cannot find the answer in the application's data.
+
+[AVAILABLE DATA]
+${context}
+[END OF DATA]
+
+Keep your answers concise and professional.`;
 
         try {
             if (!process.env.LIGHTLLM_API_ENDPOINT) {
                 throw new Error("LightLLM API endpoint is not configured.");
             }
 
+            // We don't send the entire chat history for RAG, just the current question with context.
             const apiMessages = [
                 { role: 'system', content: systemInstruction },
-                ...newMessages.map(msg => ({
-                    role: msg.role === 'model' ? 'assistant' : 'user',
-                    content: msg.text
-                }))
+                { role: 'user', content: userMessage.text }
             ];
             
             const response = await fetch(process.env.LIGHTLLM_API_ENDPOINT, {
@@ -84,9 +136,9 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose }) => {
                 throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
             }
 
-            const data = await response.json();
+            const responseData = await response.json();
             
-            const modelReply = data.choices?.[0]?.message?.content;
+            const modelReply = responseData.choices?.[0]?.message?.content;
             if (!modelReply) {
                 throw new Error("Invalid response structure from API.");
             }
@@ -145,7 +197,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose }) => {
                                 type="text"
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
-                                placeholder={isConfigured ? "Ask anything..." : "Chatbot not configured"}
+                                placeholder={isConfigured ? "Ask about contracts, contacts..." : "Chatbot not configured"}
                                 className="w-full pl-4 pr-4 py-2.5 border-0 rounded-xl bg-slate-100 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                 disabled={!isConfigured || isLoading}
                             />

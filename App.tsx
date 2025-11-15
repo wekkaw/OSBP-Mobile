@@ -88,7 +88,7 @@ const AppContent: React.FC = () => {
         </main>
         <BottomNav activeScreen={activeScreen} setActiveScreen={setActiveScreen} />
         <ChatbotFab onClick={() => setIsChatbotOpen(true)} />
-        {isChatbotOpen && <Chatbot onClose={() => setIsChatbotOpen(false)} />}
+        {isChatbotOpen && <Chatbot onClose={() => setIsChatbotOpen(false)} data={data}/>}
       </div>
     </div>
   );
