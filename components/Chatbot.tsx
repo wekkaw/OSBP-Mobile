@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-// FIX: Import GoogleGenAI to use the Gemini API.
-import { GoogleGenAI } from '@google/genai';
 import { ICONS } from '../constants';
 import Card from './common/Card';
-import { ProcessedData, ProcessedContact, Contract, Event } from '../types';
+import { ProcessedData } from '../types';
 
 interface Message {
     role: 'user' | 'model';
@@ -43,9 +41,6 @@ const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
     return dotProduct / (magnitudeA * magnitudeB);
 };
 
-// FIX: Initialize the Gemini API client.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -56,8 +51,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
     const indexedDocumentsRef = useRef<IndexedDocument[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
-    // FIX: Update configuration check to use Gemini API Key instead of old endpoint.
-    const isConfigured = !!process.env.LIGHTLLM_EMBEDDING_ENDPOINT && !!process.env.API_KEY;
+    const isConfigured = !!process.env.LIGHTLLM_EMBEDDING_ENDPOINT && !!process.env.LIGHTLLM_API_ENDPOINT;
 
     // --- Embedding and Indexing Logic ---
     const getEmbedding = async (text: string): Promise<number[]> => {
@@ -105,7 +99,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
         // 2. Create embeddings for each document
         const newIndexedDocs: IndexedDocument[] = [];
         for (let i = 0; i < totalDocs; i++) {
-            // FIX: Moved `doc` declaration out of the try block to make it accessible in the catch block.
             const doc = documentsToIndex[i];
             try {
                 const embedding = await getEmbedding(doc.text);
@@ -151,8 +144,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, data }) => {
     // --- Component Lifecycle & Effects ---
     useEffect(() => {
         if (!isConfigured) {
-            // FIX: Updated error message to reflect dependency on Gemini API Key.
-            setError("Chatbot is not configured. Please provide your Gemini API key and embedding endpoint.");
+            setError("Chatbot is not configured. Please provide your LightLLM API and embedding endpoints.");
             setIndexingStatus('error');
         } else {
             setMessages([{ role: 'model', text: "Hello! How can I help you today?" }]);
@@ -188,22 +180,38 @@ ${context}
 
 Keep your answers concise and professional.`;
 
-        // FIX: Replaced fetch call to a deprecated LLM with a call to the Gemini API.
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: userMessage.text,
-                config: {
-                    systemInstruction,
+            if (!process.env.LIGHTLLM_API_ENDPOINT) {
+                throw new Error("Chatbot API endpoint is not configured.");
+            }
+
+            const response = await fetch(process.env.LIGHTLLM_API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.LIGHTLLM_API_KEY || ''}`
                 },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo', // Or your preferred model
+                    messages: [
+                        { role: 'system', content: systemInstruction },
+                        { role: 'user', content: userMessage.text }
+                    ]
+                })
             });
 
-            const modelReply = response.text;
+            if (!response.ok) {
+                throw new Error(`API responded with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const modelReply = data.choices?.[0]?.message?.content;
+
             if (!modelReply) throw new Error("Empty response from API.");
 
             setMessages(prev => [...prev, { role: 'model', text: modelReply.trim() }]);
         } catch (e: any) {
-            console.error("Error sending message to Gemini API:", e);
+            console.error("Error sending message to API:", e);
             setMessages(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error. Please try again." }]);
             setError("Failed to get a response from the AI.");
         } finally {
