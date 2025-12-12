@@ -1,22 +1,35 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useData } from './hooks/useData';
 import { BookmarkProvider } from './contexts/BookmarkContext';
 import BottomNav from './components/BottomNav';
 import DashboardScreen from './components/DashboardScreen';
 import ContactsScreen from './components/ContactsScreen';
 import ContractsScreen from './components/ContractsScreen';
-import EventsScreen from './components/EventsScreen';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import { Screen } from './types';
 import TopStoriesScreen from './components/TopStoriesScreen';
 import BookmarksScreen from './components/BookmarksScreen';
 import ChatbotFab from './components/ChatbotFab';
 import Chatbot from './components/Chatbot';
+import NaicsSearchScreen from './components/NaicsSearchScreen';
+import ForecastsScreen from './components/ForecastsScreen';
+import EventGuideScreen from './components/EventGuideScreen';
+import IntroVideo from './components/IntroVideo';
 
 const AppContent: React.FC = () => {
   const [activeScreen, setActiveScreen] = useState<Screen>(Screen.Dashboard);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [showIntroVideo, setShowIntroVideo] = useState(false);
   const { data, loading, error } = useData();
+
+  useEffect(() => {
+    // Check local storage to see if the user has opted to hide the intro video
+    const hasSeenIntro = localStorage.getItem('osbp_intro_video_seen');
+    if (!hasSeenIntro) {
+      setShowIntroVideo(true);
+    }
+  }, []);
 
   const renderContent = () => {
     if (loading) {
@@ -50,6 +63,9 @@ const AppContent: React.FC = () => {
       case Screen.Dashboard:
         return <DashboardScreen 
           dashboardItems={data.processedDashboard} 
+          contracts={data.processedContracts}
+          events={data.events}
+          forecasts={data.forecasts}
           setActiveScreen={setActiveScreen}
         />;
       case Screen.Contracts:
@@ -60,8 +76,17 @@ const AppContent: React.FC = () => {
         return <ContactsScreen 
           contacts={data.processedContacts}
         />;
+      case Screen.NaicsSearch:
+        return <NaicsSearchScreen
+          contracts={data.processedContracts}
+        />;
+      case Screen.Forecasts:
+        return <ForecastsScreen 
+            contacts={data.processedContacts} 
+            forecasts={data.forecasts} 
+        />;
       case Screen.Events:
-        return <EventsScreen events={data.events} />;
+        return <EventGuideScreen />;
       case Screen.TopStories:
         return <TopStoriesScreen 
           stories={data.processedTopStories} 
@@ -74,7 +99,10 @@ const AppContent: React.FC = () => {
         />;
       default:
         return <DashboardScreen 
-          dashboardItems={data.processedDashboard} 
+          dashboardItems={data.processedDashboard}
+          contracts={data.processedContracts}
+          events={data.events}
+          forecasts={data.forecasts}
           setActiveScreen={setActiveScreen}
         />;
     }
@@ -82,7 +110,15 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen font-sans text-slate-800 dark:text-slate-200">
+      {showIntroVideo && <IntroVideo onClose={() => setShowIntroVideo(false)} />}
       <div className="max-w-lg mx-auto bg-slate-50/50 dark:bg-slate-900/50 min-h-[100dvh] flex flex-col border-x border-slate-200/50 dark:border-slate-800/50 shadow-2xl shadow-black/10">
+        <div className="w-full bg-white dark:bg-slate-900 border-b border-slate-200/50 dark:border-slate-800/50">
+             <img 
+                src="https://et-media-networks-751117994400.us-west1.run.app/images/osbp-mobile-header-2026.jpg" 
+                alt="OSBP Header" 
+                className="w-full h-auto object-cover block"
+             />
+        </div>
         <main className="flex-grow p-4 pb-24">
           {renderContent()}
         </main>

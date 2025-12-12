@@ -1,3 +1,4 @@
+
 export interface Center {
   center_id: string;
   center_name: string;
@@ -63,6 +64,33 @@ export interface Event {
   description: string;
 }
 
+export interface Speaker {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+}
+
+export interface AgendaSession {
+  id: string;
+  title: string;
+  description: string;
+  startTime: Date;
+  endTime: Date;
+  location: string;
+  track: 'Main Stage' | 'Workshop' | 'Networking' | 'Breakout';
+  speakers: Speaker[];
+  isLive?: boolean;
+}
+
+export interface Poll {
+  id: string;
+  question: string;
+  options: { id: string; text: string; votes: number }[];
+  isActive: boolean;
+  totalVotes: number;
+}
+
 export interface TopStory {
   id: number;
   nid: number;
@@ -98,6 +126,10 @@ export interface NodeContent {
   body: string;
 }
 
+export interface ForecastItem {
+    [key: string]: any;
+}
+
 export interface AllData {
   centers: Center[];
   contacts: Contact[];
@@ -115,11 +147,13 @@ export interface ProcessedData extends Omit<AllData, 'contacts' | 'contracts' | 
   processedContracts: Contract[];
   processedTopStories: ProcessedTopStory[];
   processedDashboard: ProcessedDashboardItem[];
+  forecasts: ForecastItem[];
 }
 
 export enum BookmarkType {
   Contact = 'Contact',
   Contract = 'Contract',
+  Session = 'Session',
 }
 
 export interface Bookmark {
@@ -134,4 +168,6 @@ export enum Screen {
   Events = 'Events',
   TopStories = 'Top Stories',
   Bookmarks = 'Bookmarks',
+  NaicsSearch = 'NAICS',
+  Forecasts = 'Forecasts',
 }

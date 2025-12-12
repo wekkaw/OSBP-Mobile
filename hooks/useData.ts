@@ -1,6 +1,8 @@
+
 import { useState, useEffect, useCallback } from 'react';
-import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory } from '../types';
-import { DATA_URLS } from '../constants';
+import * as XLSX from 'xlsx';
+import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory, ForecastItem } from '../types';
+import { DATA_URLS, FORECAST_URL } from '../constants';
 
 export const useData = () => {
   const [data, setData] = useState<ProcessedData | null>(null);
@@ -12,19 +14,40 @@ export const useData = () => {
     setError(null);
 
     try {
-      const responses = await Promise.all(
-        Object.entries(DATA_URLS).map(([key, url]) =>
+      // 1. Fetch standard JSON data
+      const jsonPromises = Object.entries(DATA_URLS).map(([key, url]) =>
           fetch(url).then(res => {
             if (!res.ok) {
               throw new Error(`Failed to fetch ${key}: ${res.statusText}`);
             }
             return res.json();
           })
-        )
-      );
+        );
+      
+      // 2. Fetch and parse Forecast XLSX
+      const forecastPromise = fetch(FORECAST_URL)
+        .then(res => {
+             if(!res.ok) throw new Error("Failed to fetch forecasts");
+             return res.arrayBuffer();
+        })
+        .then(buffer => {
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            return XLSX.utils.sheet_to_json<ForecastItem>(worksheet);
+        })
+        .catch(err => {
+            console.warn("Forecast fetch failed", err);
+            return [] as ForecastItem[];
+        });
+
+      const [jsonResults, forecasts] = await Promise.all([
+          Promise.all(jsonPromises),
+          forecastPromise
+      ]);
 
       const allData: AllData = Object.keys(DATA_URLS).reduce((acc, key, index) => {
-        acc[key as keyof AllData] = responses[index];
+        acc[key as keyof AllData] = jsonResults[index];
         return acc;
       }, {} as AllData);
 
@@ -44,7 +67,7 @@ export const useData = () => {
         .sort((a, b) => a.weight - b.weight)
         .map(item => {
             const imageName = item.image_url ? item.image_url.split('/').pop() : '';
-            const imageUrl = imageName ? `https://d33p78idni8c3b.cloudfront.net/images/${imageName}` : '';
+            const imageUrl = imageName ? `https://d2dirmrq3rvsv0.cloudfront.net/images/${imageName}` : '';
             
             if (item.node_id && item.node_id.trim() !== '') {
                 const content = nodeContentMap.get(item.node_id.trim());
@@ -86,7 +109,7 @@ export const useData = () => {
 
         return {
           ...contact,
-          photo: photoFileName ? `https://d33p78idni8c3b.cloudfront.net/images/${photoFileName}` : '',
+          photo: photoFileName ? `https://d2dirmrq3rvsv0.cloudfront.net/images/${photoFileName}` : '',
           // position is used directly from the contact object.
           center: centerName,
           associatedContracts,
@@ -99,6 +122,7 @@ export const useData = () => {
           processedContracts, 
           processedTopStories,
           processedDashboard,
+          forecasts 
       });
 
     } catch (e: any) {
