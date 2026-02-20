@@ -73,4 +73,4 @@ export const DATA_URLS = {
 
 export const FORECAST_URL = "data/AcqForecastNew.xlsx";
 export const NAICS_URL = "data/2022_NAICS_Descriptions.xlsx";
-export const NVDB_URL = "data/nvdb-sample-data.xlsx";
+export const NVDB_URL = "data/nvdb-sample-data.csv";

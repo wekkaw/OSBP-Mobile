@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory, ForecastItem, RawNaicsRow } from '../types';
 import { DATA_URLS, FORECAST_URL, NAICS_URL, NVDB_URL } from '../constants';
 
@@ -75,17 +76,25 @@ export const useData = () => {
             return [] as RawNaicsRow[];
         });
 
-      // 4. Fetch and parse NVDB XLSX
+      // 4. Fetch and parse NVDB CSV
       const nvdbPromise = fetch(NVDB_URL)
         .then(res => {
           if (!res.ok) throw new Error("Failed to fetch NVDB data");
-          return res.arrayBuffer();
+          return res.text();
         })
-        .then(buffer => {
-          const workbook = XLSX.read(buffer, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          return XLSX.utils.sheet_to_json<any>(sheet);
+        .then(text => {
+            return new Promise<any[]>((resolve, reject) => {
+                Papa.parse(text, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        resolve(results.data as any[]);
+                    },
+                    error: (err: any) => {
+                        reject(err);
+                    }
+                });
+            });
         })
         .catch(err => {
             console.warn("NVDB fetch failed", err);
