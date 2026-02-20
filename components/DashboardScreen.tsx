@@ -4,7 +4,6 @@ import { ProcessedDashboardItem, Screen, Contract, Event, ForecastItem } from '.
 import Header from './common/Header';
 import Card from './common/Card';
 import { ICONS } from '../constants';
-import { formatPotentialValue } from '../utils/formatters';
 
 interface DashboardScreenProps {
   dashboardItems: ProcessedDashboardItem[]; // Kept for legacy compatibility if needed
@@ -127,9 +126,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
       {/* --- Key Metrics Grid --- */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard 
-            title="Total Contracts" 
-            value={metrics.contractCount} 
-            subtext={`${formatCurrency(metrics.totalValue)} Value`}
+            title="Total Value" 
+            value={formatCurrency(metrics.totalValue)} 
+            subtext={`${metrics.contractCount} Active Contracts`}
             icon={ICONS.contracts}
             colorClass="bg-indigo-500 text-indigo-500"
         />

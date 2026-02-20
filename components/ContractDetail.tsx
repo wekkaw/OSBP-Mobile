@@ -1,9 +1,11 @@
+
 import React from 'react';
 import { Contract } from '../types';
 import Card from './common/Card';
 import Header from './common/Header';
 import { formatPotentialValue, formatDate } from '../utils/formatters';
 import { ICONS } from '../constants';
+import { useBrowser } from '../contexts/BrowserContext';
 
 interface ContractDetailProps {
     contract: Contract;
@@ -14,6 +16,15 @@ interface ContractDetailProps {
 }
 
 const DetailRow: React.FC<{ label: string; value: string | number | undefined; href?: string; }> = ({ label, value, href }) => {
+    const { openBrowser } = useBrowser();
+
+    const handleLinkClick = (e: React.MouseEvent) => {
+        if (href) {
+            e.preventDefault();
+            openBrowser(href, label);
+        }
+    };
+
     const content = (
         <div className="flex justify-between items-start py-3.5">
             <p className="font-medium text-slate-500 dark:text-slate-400 flex-shrink-0 mr-4">{label}</p>
@@ -23,7 +34,7 @@ const DetailRow: React.FC<{ label: string; value: string | number | undefined; h
 
     if (href && value) {
         return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="block transition-colors hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-lg -mx-4 px-4">
+            <a href={href} onClick={handleLinkClick} className="block transition-colors hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-lg -mx-4 px-4">
                 {content}
             </a>
         );

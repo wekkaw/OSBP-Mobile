@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ProcessedContact, Contract, BookmarkType } from '../types';
 import Card from './common/Card';
@@ -8,6 +9,7 @@ import { useBookmarkContext } from '../contexts/BookmarkContext';
 import ContractDetail from './ContractDetail';
 import { formatPotentialValue, formatDate } from '../utils/formatters';
 import SlackMessageModal from './SlackMessageModal';
+import { useBrowser } from '../contexts/BrowserContext';
 
 interface ContactDetailProps {
     contact: ProcessedContact;
@@ -15,7 +17,17 @@ interface ContactDetailProps {
 }
 
 const InfoRow: React.FC<{ icon: React.ReactNode, text: string | undefined, label: string, href?: string }> = ({ icon, text, label, href }) => {
+    const { openBrowser } = useBrowser();
+
     if (!text) return null;
+
+    const handleLinkClick = (e: React.MouseEvent) => {
+        // Only use in-app browser for web links (http/https)
+        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+            e.preventDefault();
+            openBrowser(href, label);
+        }
+    };
     
     const content = (
         <div className="flex items-center py-3.5">
@@ -29,7 +41,7 @@ const InfoRow: React.FC<{ icon: React.ReactNode, text: string | undefined, label
 
     if (href) {
         return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="block transition-colors hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-lg -mx-4 px-4 group">
+            <a href={href} onClick={handleLinkClick} target="_blank" rel="noopener noreferrer" className="block transition-colors hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-lg -mx-4 px-4 group">
                 {content}
             </a>
         );

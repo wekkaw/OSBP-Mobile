@@ -130,6 +130,12 @@ export interface ForecastItem {
     [key: string]: any;
 }
 
+export interface RawNaicsRow {
+    Code: string | number;
+    Title: string;
+    Description: string;
+}
+
 export interface AllData {
   centers: Center[];
   contacts: Contact[];
@@ -148,6 +154,7 @@ export interface ProcessedData extends Omit<AllData, 'contacts' | 'contracts' | 
   processedTopStories: ProcessedTopStory[];
   processedDashboard: ProcessedDashboardItem[];
   forecasts: ForecastItem[];
+  naicsData: RawNaicsRow[];
 }
 
 export enum BookmarkType {
@@ -170,4 +177,5 @@ export enum Screen {
   Bookmarks = 'Bookmarks',
   NaicsSearch = 'NAICS',
   Forecasts = 'Forecasts',
+  Settings = 'Settings',
 }

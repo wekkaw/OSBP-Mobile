@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from './hooks/useData';
 import { BookmarkProvider } from './contexts/BookmarkContext';
+import { BrowserProvider, useBrowser } from './contexts/BrowserContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import BottomNav from './components/BottomNav';
 import DashboardScreen from './components/DashboardScreen';
 import ContactsScreen from './components/ContactsScreen';
@@ -16,12 +18,18 @@ import NaicsSearchScreen from './components/NaicsSearchScreen';
 import ForecastsScreen from './components/ForecastsScreen';
 import EventGuideScreen from './components/EventGuideScreen';
 import IntroVideo from './components/IntroVideo';
+import InAppBrowser from './components/common/InAppBrowser';
+import HamburgerMenu from './components/HamburgerMenu';
+import SettingsScreen from './components/SettingsScreen';
+import { ICONS } from './constants';
 
 const AppContent: React.FC = () => {
   const [activeScreen, setActiveScreen] = useState<Screen>(Screen.Dashboard);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showIntroVideo, setShowIntroVideo] = useState(false);
   const { data, loading, error } = useData();
+  const { isOpen, url, title, closeBrowser } = useBrowser();
 
   useEffect(() => {
     // Check local storage to see if the user has opted to hide the intro video
@@ -79,6 +87,7 @@ const AppContent: React.FC = () => {
       case Screen.NaicsSearch:
         return <NaicsSearchScreen
           contracts={data.processedContracts}
+          naicsData={data.naicsData}
         />;
       case Screen.Forecasts:
         return <ForecastsScreen 
@@ -97,6 +106,8 @@ const AppContent: React.FC = () => {
           allContacts={data.processedContacts}
           allContracts={data.processedContracts}
         />;
+      case Screen.Settings:
+        return <SettingsScreen />;
       default:
         return <DashboardScreen 
           dashboardItems={data.processedDashboard}
@@ -111,13 +122,30 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen font-sans text-slate-800 dark:text-slate-200">
       {showIntroVideo && <IntroVideo onClose={() => setShowIntroVideo(false)} />}
+      <InAppBrowser isOpen={isOpen} url={url} title={title} onClose={closeBrowser} />
+      <HamburgerMenu 
+        isOpen={isMenuOpen} 
+        onClose={() => setIsMenuOpen(false)} 
+        activeScreen={activeScreen} 
+        setActiveScreen={setActiveScreen} 
+      />
+      
       <div className="max-w-lg mx-auto bg-slate-50/50 dark:bg-slate-900/50 min-h-[100dvh] flex flex-col border-x border-slate-200/50 dark:border-slate-800/50 shadow-2xl shadow-black/10">
-        <div className="w-full bg-white dark:bg-slate-900 border-b border-slate-200/50 dark:border-slate-800/50">
+        <div className="w-full bg-white dark:bg-slate-900 border-b border-slate-200/50 dark:border-slate-800/50 relative">
              <img 
                 src="https://et-media-networks-751117994400.us-west1.run.app/images/osbp-mobile-header-2026.jpg" 
                 alt="OSBP Header" 
                 className="w-full h-auto object-cover block"
              />
+             <button 
+                onClick={() => setIsMenuOpen(true)}
+                className="absolute top-1/2 -translate-y-1/2 left-4 p-2 bg-black/30 hover:bg-black/50 backdrop-blur-md rounded-full text-white transition-colors border border-white/20"
+                aria-label="Open Menu"
+             >
+               <div className="w-6 h-6">
+                 {ICONS.menu}
+               </div>
+             </button>
         </div>
         <main className="flex-grow p-4 pb-24">
           {renderContent()}
@@ -133,9 +161,13 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <BookmarkProvider>
-      <AppContent />
-    </BookmarkProvider>
+    <ThemeProvider>
+      <BookmarkProvider>
+        <BrowserProvider>
+          <AppContent />
+        </BrowserProvider>
+      </BookmarkProvider>
+    </ThemeProvider>
   );
 };
 

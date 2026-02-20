@@ -1,8 +1,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory, ForecastItem } from '../types';
-import { DATA_URLS, FORECAST_URL } from '../constants';
+import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory, ForecastItem, RawNaicsRow } from '../types';
+import { DATA_URLS, FORECAST_URL, NAICS_URL } from '../constants';
 
 export const useData = () => {
   const [data, setData] = useState<ProcessedData | null>(null);
@@ -41,9 +41,44 @@ export const useData = () => {
             return [] as ForecastItem[];
         });
 
-      const [jsonResults, forecasts] = await Promise.all([
+      // 3. Fetch and parse NAICS XLSX - Loading directly from local data folder
+      const naicsPromise = fetch(NAICS_URL)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch NAICS data from local source");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rawJson = XLSX.utils.sheet_to_json<any>(sheet);
+          
+          let rows: RawNaicsRow[] = [];
+          if (rawJson.length > 0) {
+              const firstRow = rawJson[0];
+              const keys = Object.keys(firstRow);
+              // Normalize keys to find Code, Title, and Description columns
+              const codeKey = keys.find(k => k.toLowerCase().includes('code')) || 'Code';
+              const titleKey = keys.find(k => k.toLowerCase().includes('title')) || 'Title';
+              const descKey = keys.find(k => k.toLowerCase().includes('description')) || 'Description';
+  
+              rows = rawJson.map(row => ({
+                  Code: row[codeKey],
+                  Title: row[titleKey],
+                  Description: row[descKey]
+              }));
+          }
+          return rows;
+        })
+        .catch(err => {
+            console.warn("NAICS fetch failed", err);
+            return [] as RawNaicsRow[];
+        });
+
+      const [jsonResults, forecasts, naicsData] = await Promise.all([
           Promise.all(jsonPromises),
-          forecastPromise
+          forecastPromise,
+          naicsPromise
       ]);
 
       const allData: AllData = Object.keys(DATA_URLS).reduce((acc, key, index) => {
@@ -97,20 +132,13 @@ export const useData = () => {
 
       // Process contacts to add center name from lookup
       const processedContacts: ProcessedContact[] = allData.contacts.map((contact: RealContact) => {
-        // The contract data no longer contains a primaryContactId, so we cannot link them.
-        // The associatedContracts array will be empty.
         const associatedContracts: Contract[] = [];
-        
-        // Correctly extract the filename from the photo path
         const photoFileName = contact.photo ? contact.photo.split('/').pop() : '';
-
-        // As requested, link center_id to centers.json to find the center name.
         const centerName = centersMap.get(String(contact.center_id)) || 'Unknown Center';
 
         return {
           ...contact,
           photo: photoFileName ? `https://d2dirmrq3rvsv0.cloudfront.net/images/${photoFileName}` : '',
-          // position is used directly from the contact object.
           center: centerName,
           associatedContracts,
         };
@@ -122,7 +150,8 @@ export const useData = () => {
           processedContracts, 
           processedTopStories,
           processedDashboard,
-          forecasts 
+          forecasts,
+          naicsData
       });
 
     } catch (e: any) {
@@ -135,8 +164,7 @@ export const useData = () => {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
   return { data, loading, error };
 };
