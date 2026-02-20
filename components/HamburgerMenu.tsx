@@ -107,6 +107,12 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose, activeSc
                         isActive={activeScreen === Screen.NaicsSearch} 
                         onClick={() => handleNavigation(Screen.NaicsSearch)} 
                     />
+                    <MenuItem 
+                        label="Vendor Database" 
+                        icon={ICONS.database} 
+                        isActive={activeScreen === Screen.Nvdb} 
+                        onClick={() => handleNavigation(Screen.Nvdb)} 
+                    />
                     <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
                      <MenuItem 
                         label="Events" 

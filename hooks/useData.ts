@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { AllData, ProcessedData, ProcessedContact, Contract, Contact as RealContact, Screen, DashboardItem, ProcessedDashboardItem, ProcessedTopStory, ForecastItem, RawNaicsRow } from '../types';
-import { DATA_URLS, FORECAST_URL, NAICS_URL } from '../constants';
+import { DATA_URLS, FORECAST_URL, NAICS_URL, NVDB_URL } from '../constants';
 
 export const useData = () => {
   const [data, setData] = useState<ProcessedData | null>(null);
@@ -75,10 +75,28 @@ export const useData = () => {
             return [] as RawNaicsRow[];
         });
 
-      const [jsonResults, forecasts, naicsData] = await Promise.all([
+      // 4. Fetch and parse NVDB XLSX
+      const nvdbPromise = fetch(NVDB_URL)
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch NVDB data");
+          return res.arrayBuffer();
+        })
+        .then(buffer => {
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          return XLSX.utils.sheet_to_json<any>(sheet);
+        })
+        .catch(err => {
+            console.warn("NVDB fetch failed", err);
+            return [] as any[];
+        });
+
+      const [jsonResults, forecasts, naicsData, processedNvdb] = await Promise.all([
           Promise.all(jsonPromises),
           forecastPromise,
-          naicsPromise
+          naicsPromise,
+          nvdbPromise
       ]);
 
       const allData: AllData = Object.keys(DATA_URLS).reduce((acc, key, index) => {
@@ -151,7 +169,8 @@ export const useData = () => {
           processedTopStories,
           processedDashboard,
           forecasts,
-          naicsData
+          naicsData,
+          processedNvdb
       });
 
     } catch (e: any) {

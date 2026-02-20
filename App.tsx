@@ -15,6 +15,7 @@ import BookmarksScreen from './components/BookmarksScreen';
 import ChatbotFab from './components/ChatbotFab';
 import Chatbot from './components/Chatbot';
 import NaicsSearchScreen from './components/NaicsSearchScreen';
+import NvdbSearchScreen from './components/NvdbSearchScreen';
 import ForecastsScreen from './components/ForecastsScreen';
 import EventGuideScreen from './components/EventGuideScreen';
 import IntroVideo from './components/IntroVideo';
@@ -74,6 +75,7 @@ const AppContent: React.FC = () => {
           contracts={data.processedContracts}
           events={data.events}
           forecasts={data.forecasts}
+          nvdbData={data.processedNvdb}
           setActiveScreen={setActiveScreen}
         />;
       case Screen.Contracts:
@@ -89,6 +91,8 @@ const AppContent: React.FC = () => {
           contracts={data.processedContracts}
           naicsData={data.naicsData}
         />;
+      case Screen.Nvdb:
+        return <NvdbSearchScreen nvdbData={data.processedNvdb} />;
       case Screen.Forecasts:
         return <ForecastsScreen 
             contacts={data.processedContacts} 
@@ -114,6 +118,7 @@ const AppContent: React.FC = () => {
           contracts={data.processedContracts}
           events={data.events}
           forecasts={data.forecasts}
+          nvdbData={data.processedNvdb}
           setActiveScreen={setActiveScreen}
         />;
     }

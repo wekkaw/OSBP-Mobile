@@ -155,6 +155,7 @@ export interface ProcessedData extends Omit<AllData, 'contacts' | 'contracts' | 
   processedDashboard: ProcessedDashboardItem[];
   forecasts: ForecastItem[];
   naicsData: RawNaicsRow[];
+  processedNvdb: NvdbRow[];
 }
 
 export enum BookmarkType {
@@ -178,4 +179,9 @@ export enum Screen {
   NaicsSearch = 'NAICS',
   Forecasts = 'Forecasts',
   Settings = 'Settings',
+  Nvdb = 'Vendor Database',
+}
+
+export interface NvdbRow {
+  [key: string]: any;
 }

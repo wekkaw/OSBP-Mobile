@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { ProcessedDashboardItem, Screen, Contract, Event, ForecastItem } from '../types';
+import { ProcessedDashboardItem, Screen, Contract, Event, ForecastItem, NvdbRow } from '../types';
 import Header from './common/Header';
 import Card from './common/Card';
 import { ICONS } from '../constants';
@@ -10,6 +10,7 @@ interface DashboardScreenProps {
   contracts: Contract[];
   events: Event[];
   forecasts: ForecastItem[];
+  nvdbData: NvdbRow[];
   setActiveScreen: (screen: Screen) => void;
 }
 
@@ -28,8 +29,11 @@ const parseValue = (valStr: string): number => {
 
 // --- Sub-components for the Dashboard ---
 
-const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: React.ReactNode; colorClass: string }> = ({ title, value, subtext, icon, colorClass }) => (
-    <Card className="p-4 flex items-center justify-between relative overflow-hidden group">
+const StatCard: React.FC<{ title: string; value: string | number; subtext: string; icon: React.ReactNode; colorClass: string; onClick?: () => void }> = ({ title, value, subtext, icon, colorClass, onClick }) => (
+    <Card 
+        className={`p-4 flex items-center justify-between relative overflow-hidden group transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02]' : ''}`}
+        onClick={onClick}
+    >
         <div className="relative z-10">
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
             <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{value}</h3>
@@ -53,7 +57,7 @@ const SectionHeader: React.FC<{ title: string; action?: string; onAction?: () =>
     </div>
 );
 
-const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, forecasts, setActiveScreen }) => {
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, forecasts, nvdbData, setActiveScreen }) => {
   
   // --- Metric Calculations ---
   const metrics = useMemo(() => {
@@ -100,10 +104,11 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
         totalValue: totalContractValue,
         forecastCount: forecasts.length,
         upcomingEvents: events.filter(e => new Date(e.date) >= new Date()).length,
+        vendorCount: nvdbData ? nvdbData.length : 0,
         topCenters,
         topPhases
     };
-  }, [contracts, events, forecasts]);
+  }, [contracts, events, forecasts, nvdbData]);
 
   const formatCurrency = (val: number) => {
       if (val >= 1000000000) return `$${(val / 1000000000).toFixed(1)}B`;
@@ -113,16 +118,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
 
   return (
     <div className="space-y-6 pb-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Executive Dashboard</h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">Welcome back, here is your daily overview.</p>
-        </div>
-        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border-2 border-white dark:border-slate-600 shadow-sm">
-             <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" alt="User" />
-        </div>
-      </div>
-
       {/* --- Key Metrics Grid --- */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard 
@@ -131,6 +126,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
             subtext={`${metrics.contractCount} Active Contracts`}
             icon={ICONS.contracts}
             colorClass="bg-indigo-500 text-indigo-500"
+            onClick={() => setActiveScreen(Screen.Contracts)}
         />
         <StatCard 
             title="Active RFPs" 
@@ -138,6 +134,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
             subtext="Open Opportunities"
             icon={ICONS.megaphone}
             colorClass="bg-amber-500 text-amber-500"
+            onClick={() => setActiveScreen(Screen.Contracts)}
         />
         <StatCard 
             title="Forecasts" 
@@ -145,6 +142,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
             subtext="Future Pipeline"
             icon={ICONS.chart}
             colorClass="bg-emerald-500 text-emerald-500"
+            onClick={() => setActiveScreen(Screen.Forecasts)}
         />
         <StatCard 
             title="Events" 
@@ -152,13 +150,22 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
             subtext="Upcoming"
             icon={ICONS.events}
             colorClass="bg-rose-500 text-rose-500"
+            onClick={() => setActiveScreen(Screen.Events)}
+        />
+        <StatCard 
+            title="Vendors" 
+            value={metrics.vendorCount} 
+            subtext="Registered Vendors"
+            icon={ICONS.database}
+            colorClass="bg-cyan-500 text-cyan-500"
+            onClick={() => setActiveScreen(Screen.Nvdb)}
         />
       </div>
 
       {/* --- Charts Section --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Contracts by Center */}
-          <div>
+          <div className="space-y-4">
             <SectionHeader title="Top Centers by Award Volume" />
             <Card className="p-5">
                 <div className="space-y-4">
@@ -181,13 +188,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
           </div>
 
           {/* Forecast Pipeline */}
-          <div>
+          <div className="space-y-4">
              <SectionHeader title="Acquisition Pipeline Phase" action="View Forecasts" onAction={() => setActiveScreen(Screen.Forecasts)} />
              <Card className="p-5 flex flex-col justify-center h-full">
                 <div className="flex items-center justify-center space-x-6">
                     <div className="relative w-32 h-32">
                          <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-                            {/* Simple Doughnut Representation */}
                             <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#e2e8f0" strokeWidth="3" className="dark:stroke-slate-700" />
                             <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#6366f1" strokeWidth="3" strokeDasharray="60, 100" />
                             <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#ec4899" strokeWidth="3" strokeDasharray="25, 100" strokeDashoffset="-60" />
@@ -200,10 +206,10 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ contracts, events, fo
                     </div>
                     <div className="space-y-2">
                         {metrics.topPhases.map(([phase, count], idx) => (
-                            <div key={phase} className="flex items-center text-xs">
-                                <span className={`w-2 h-2 rounded-full mr-2 ${['bg-indigo-500', 'bg-pink-500', 'bg-emerald-500', 'bg-slate-400'][idx] || 'bg-slate-400'}`}></span>
+                            <div key={phase} className="flex items-center text-xs space-x-2">
+                                <span className={`w-2 h-2 rounded-full ${['bg-indigo-500', 'bg-pink-500', 'bg-emerald-500', 'bg-slate-400'][idx] || 'bg-slate-400'}`}></span>
                                 <span className="text-slate-600 dark:text-slate-300 flex-1 truncate max-w-[100px]">{phase}</span>
-                                <span className="font-bold ml-2">{count}</span>
+                                <span className="font-bold">{count}</span>
                             </div>
                         ))}
                     </div>

@@ -140,9 +140,9 @@ const ContractsScreen: React.FC<ContractsScreenProps> = ({ contracts: allContrac
   const hasActiveFilters = searchTerm || centerFilter !== 'all' || typeFilter !== 'all';
 
   const renderContractList = (contracts: Contract[]) => {
-    return contracts.map(contract => (
+    return contracts.map((contract, index) => (
         <ContractItem 
-            key={contract.id} 
+            key={`${contract.contract_number}-${index}`} 
             contract={contract} 
             isBookmarked={isBookmarked(contract.contract_number, BookmarkType.Contract)}
             onClick={() => setSelectedContract(contract)}
